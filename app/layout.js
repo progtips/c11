@@ -1,6 +1,6 @@
 export const metadata = {
-  title: 'Next.js App',
-  description: 'Минимальное приложение на Next.js',
+  title: 'Референт - переводчик с ИИ-обработкой',
+  description: 'Приложение для анализа англоязычных статей с помощью ИИ',
 }
 
 import './globals.css'
@@ -12,4 +12,3 @@ export default function RootLayout({ children }) {
     </html>
   )
 }
-

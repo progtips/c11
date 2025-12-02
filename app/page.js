@@ -7,6 +7,7 @@ export default function Home() {
   const [result, setResult] = useState('')
   const [loading, setLoading] = useState(false)
   const [activeButton, setActiveButton] = useState(null)
+  const [parsedArticle, setParsedArticle] = useState(null)
 
   const handleParse = async () => {
     if (!url.trim()) {
@@ -43,9 +44,13 @@ export default function Home() {
 
       if (!response.ok) {
         setResult(`Ошибка (${response.status}): ${data.error || 'Неизвестная ошибка'}`)
+        setParsedArticle(null)
         return
       }
 
+      // Сохраняем распарсенную статью для последующего перевода
+      setParsedArticle(data)
+      
       // Форматируем JSON для красивого отображения
       setResult(JSON.stringify(data, null, 2))
     } catch (error) {
@@ -82,6 +87,57 @@ export default function Home() {
     } catch (error) {
       setResult('Произошла ошибка при обработке запроса')
       console.error(error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleTranslate = async () => {
+    if (!parsedArticle) {
+      alert('Сначала распарсите статью')
+      return
+    }
+
+    setLoading(true)
+    setActiveButton('translate')
+    setResult('')
+
+    try {
+      // Формируем текст статьи для перевода
+      const articleText = `${parsedArticle.title}\n\n${parsedArticle.content}`
+
+      console.log('Отправка запроса на перевод')
+      const response = await fetch('/api/translate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ text: articleText }),
+      })
+
+      console.log('Ответ получен, статус:', response.status)
+
+      let data
+      try {
+        data = await response.json()
+        console.log('Данные получены:', data)
+      } catch (jsonError) {
+        const text = await response.text()
+        console.error('Ошибка парсинга JSON:', jsonError, 'Текст ответа:', text)
+        setResult(`Ошибка: Не удалось распарсить ответ сервера. Статус: ${response.status}\nТекст: ${text}`)
+        return
+      }
+
+      if (!response.ok) {
+        setResult(`Ошибка (${response.status}): ${data.error || 'Неизвестная ошибка'}`)
+        return
+      }
+
+      // Выводим перевод в поле результата
+      setResult(data.translation || 'Перевод не получен')
+    } catch (error) {
+      console.error('Ошибка при переводе:', error)
+      setResult(`Ошибка при переводе: ${error.message}\n\nПроверьте консоль браузера для подробностей.`)
     } finally {
       setLoading(false)
     }
@@ -147,6 +203,38 @@ export default function Home() {
             )}
           </button>
         </div>
+
+        {/* Кнопка перевода */}
+        {parsedArticle && (
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+              Перевод статьи:
+            </h2>
+            <button
+              onClick={handleTranslate}
+              disabled={loading}
+              className={`w-full px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                activeButton === 'translate' && loading
+                  ? 'bg-red-600 text-white'
+                  : activeButton === 'translate'
+                  ? 'bg-red-500 text-white shadow-lg'
+                  : 'bg-red-500 hover:bg-red-600 text-white hover:shadow-md'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {loading && activeButton === 'translate' ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Перевод...
+                </span>
+              ) : (
+                'Перевести статью'
+              )}
+            </button>
+          </div>
+        )}
 
         {/* Кнопки действий */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">

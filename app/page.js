@@ -9,61 +9,13 @@ export default function Home() {
   const [activeButton, setActiveButton] = useState(null)
   const [parsedArticle, setParsedArticle] = useState(null)
 
-  const handleParse = async () => {
-    if (!url.trim()) {
-      alert('Пожалуйста, введите URL статьи')
-      return
-    }
-
-    setLoading(true)
-    setActiveButton('parse')
-    setResult('')
-
-    try {
-      console.log('Отправка запроса на парсинг:', url)
-      const response = await fetch('/api/parse', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ url }),
-      })
-
-      console.log('Ответ получен, статус:', response.status)
-
-      let data
-      try {
-        data = await response.json()
-        console.log('Данные получены:', data)
-      } catch (jsonError) {
-        const text = await response.text()
-        console.error('Ошибка парсинга JSON:', jsonError, 'Текст ответа:', text)
-        setResult(`Ошибка: Не удалось распарсить ответ сервера. Статус: ${response.status}\nТекст: ${text}`)
-        return
-      }
-
-      if (!response.ok) {
-        setResult(`Ошибка (${response.status}): ${data.error || 'Неизвестная ошибка'}`)
-        setParsedArticle(null)
-        return
-      }
-
-      // Сохраняем распарсенную статью для последующего перевода
-      setParsedArticle(data)
-      
-      // Форматируем JSON для красивого отображения
-      setResult(JSON.stringify(data, null, 2))
-    } catch (error) {
-      console.error('Ошибка при парсинге:', error)
-      setResult(`Ошибка при парсинге: ${error.message}\n\nПроверьте консоль браузера для подробностей.`)
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleSubmit = async (action) => {
-    if (!url.trim()) {
-      alert('Пожалуйста, введите URL статьи')
+    // Проверяем наличие URL или распарсенной статьи
+    const urlTrimmed = url ? url.trim() : ''
+    
+    // Если нет ни распарсенной статьи, ни URL - показываем ошибку и не начинаем загрузку
+    if (!parsedArticle && (!urlTrimmed || urlTrimmed.length === 0)) {
+      setResult('Ошибка: Пожалуйста, введите URL статьи или сначала распарсите статью')
       return
     }
 
@@ -72,21 +24,92 @@ export default function Home() {
     setResult('')
 
     try {
-      // Здесь будет логика вызова API
-      // Пока что просто имитация загрузки
-      await new Promise(resolve => setTimeout(resolve, 1000))
-      
-      // Временный результат для демонстрации
-      const results = {
-        summary: 'Статья рассказывает о современных технологиях искусственного интеллекта и их применении в различных сферах жизни.',
-        thesis: '• ИИ становится все более важным инструментом\n• Технологии развиваются быстрыми темпами\n• Применение ИИ расширяется в разных областях',
-        telegram: '🤖 Новости ИИ\n\nСовременные технологии искусственного интеллекта открывают новые возможности...'
+      // Определяем endpoint и поле ответа в зависимости от действия
+      const endpoints = {
+        summary: '/api/summary',
+        thesis: '/api/thesis',
+        telegram: '/api/telegram'
       }
+
+      const responseFields = {
+        summary: 'summary',
+        thesis: 'thesis',
+        telegram: 'post'
+      }
+
+      const endpoint = endpoints[action]
+      const responseField = responseFields[action]
+
+      if (!endpoint || !responseField) {
+        setResult(`Неизвестное действие: ${action}`)
+        setLoading(false)
+        return
+      }
+
+      // Финальная проверка перед отправкой запроса
+      if (!parsedArticle && (!urlTrimmed || urlTrimmed.length === 0)) {
+        setResult('Ошибка: URL статьи не может быть пустым')
+        setLoading(false)
+        return
+      }
+
+      // Формируем тело запроса: передаем либо распарсенную статью, либо URL
+      // В этом месте мы уверены, что либо есть parsedArticle, либо urlTrimmed не пустой
+      const requestBody = parsedArticle
+        ? { article: parsedArticle }
+        : { url: urlTrimmed }
+
+      console.log(`Отправка запроса на ${action}, endpoint: ${endpoint}`)
       
-      setResult(results[action] || 'Результат будет здесь')
+      let response
+      try {
+        response = await fetch(endpoint, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        })
+      } catch (networkError) {
+        console.error('Ошибка сети:', networkError)
+        setResult('Ошибка сети: не удалось подключиться к серверу. Проверьте подключение к интернету.')
+        return
+      }
+
+      console.log('Ответ получен, статус:', response.status)
+
+      let data
+      try {
+        data = await response.json()
+        console.log('Данные получены:', data)
+      } catch (jsonError) {
+        let text
+        try {
+          text = await response.text()
+        } catch (textError) {
+          text = 'Не удалось прочитать текст ответа'
+        }
+        console.error('Ошибка парсинга JSON:', jsonError, 'Текст ответа:', text)
+        setResult(`Ошибка: Не удалось распарсить ответ сервера. Статус: ${response.status}\nТекст: ${text}`)
+        return
+      }
+
+      if (!response.ok) {
+        setResult(`Ошибка (${response.status}): ${data.error || 'Неизвестная ошибка'}`)
+        return
+      }
+
+      // Извлекаем результат из соответствующего поля ответа
+      const result = data[responseField]
+      if (!result) {
+        setResult(`Ошибка: Поле "${responseField}" не найдено в ответе сервера`)
+        return
+      }
+
+      setResult(result)
     } catch (error) {
-      setResult('Произошла ошибка при обработке запроса')
-      console.error(error)
+      console.error(`Ошибка при обработке запроса (${action}):`, error)
+      setResult(`Ошибка при обработке запроса: ${error.message}\n\nПроверьте консоль браузера для подробностей.`)
     } finally {
       setLoading(false)
     }
@@ -122,7 +145,12 @@ export default function Home() {
         data = await response.json()
         console.log('Данные получены:', data)
       } catch (jsonError) {
-        const text = await response.text()
+        let text
+        try {
+          text = await response.text()
+        } catch (textError) {
+          text = 'Не удалось прочитать текст ответа'
+        }
         console.error('Ошибка парсинга JSON:', jsonError, 'Текст ответа:', text)
         setResult(`Ошибка: Не удалось распарсить ответ сервера. Статус: ${response.status}\nТекст: ${text}`)
         return
@@ -172,36 +200,6 @@ export default function Home() {
               disabled={loading}
             />
           </div>
-        </div>
-
-        {/* Кнопка парсинга */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Парсинг статьи:
-          </h2>
-          <button
-            onClick={handleParse}
-            disabled={loading}
-            className={`w-full px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
-              activeButton === 'parse' && loading
-                ? 'bg-orange-600 text-white'
-                : activeButton === 'parse'
-                ? 'bg-orange-500 text-white shadow-lg'
-                : 'bg-orange-500 hover:bg-orange-600 text-white hover:shadow-md'
-            } disabled:opacity-50 disabled:cursor-not-allowed`}
-          >
-            {loading && activeButton === 'parse' ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Парсинг...
-              </span>
-            ) : (
-              'Парсить статью'
-            )}
-          </button>
         </div>
 
         {/* Кнопка перевода */}

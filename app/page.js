@@ -101,7 +101,7 @@ export default function Home() {
 
       // Извлекаем результат из соответствующего поля ответа
       const result = data[responseField]
-      if (!result) {
+      if (result === undefined || result === null) {
         setResult(`Ошибка: Поле "${responseField}" не найдено в ответе сервера`)
         return
       }

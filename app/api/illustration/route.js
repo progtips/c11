@@ -306,26 +306,33 @@ export async function POST(request) {
     }
 
     try {
-      const imageResponse = await fetch(
-        'https://api-inference.huggingface.co/models/stabilityai/stable-diffusion-xl-base-1.0',
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${hfApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            inputs: imagePrompt,
-            parameters: {
-              num_inference_steps: 50,
-              guidance_scale: 7.5
-            }
-          }),
-        }
-      );
+      // Используем новый формат Hugging Face Router API
+      const modelName = 'stabilityai/stable-diffusion-xl-base-1.0';
+      const endpoint = `https://router.huggingface.co/hf-inference/models/${modelName}`;
+      
+      console.log('Отправка запроса на генерацию изображения, endpoint:', endpoint);
+      
+      const imageResponse = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${hfApiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          inputs: imagePrompt
+        }),
+      });
+      
+      console.log('Ответ от Hugging Face API получен, статус:', imageResponse.status);
 
       if (!imageResponse.ok) {
-        const errorText = await imageResponse.text();
+        let errorText;
+        try {
+          errorText = await imageResponse.text();
+        } catch (e) {
+          errorText = 'Не удалось прочитать текст ошибки';
+        }
+        
         console.error('Ошибка Hugging Face API:', imageResponse.status, errorText);
         
         // Если модель загружается, возвращаем промпт
@@ -337,10 +344,21 @@ export async function POST(request) {
           });
         }
         
-        return Response.json(
-          { error: `Ошибка генерации изображения: ${errorText}` },
-          { status: imageResponse.status }
-        );
+        // Если 404 или 410, возвращаем промпт с информацией
+        if (imageResponse.status === 404 || imageResponse.status === 410) {
+          return Response.json({
+            prompt: imagePrompt,
+            imageUrl: null,
+            message: `API генерации изображений недоступен (${imageResponse.status}). Используйте промпт выше для генерации изображения в другом сервисе (например, DALL-E, Midjourney, Stable Diffusion).`
+          });
+        }
+        
+        // Для других ошибок возвращаем промпт с подробной информацией
+        return Response.json({
+          prompt: imagePrompt,
+          imageUrl: null,
+          message: `Ошибка генерации изображения (${imageResponse.status}): ${errorText}. Используйте промпт выше для генерации изображения в другом сервисе.`
+        });
       }
 
       // Получаем изображение как blob

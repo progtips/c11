@@ -8,6 +8,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false)
   const [activeButton, setActiveButton] = useState(null)
   const [parsedArticle, setParsedArticle] = useState(null)
+  const [illustrationData, setIllustrationData] = useState(null)
 
   const handleSubmit = async (action) => {
     // Проверяем наличие URL или распарсенной статьи
@@ -107,9 +108,99 @@ export default function Home() {
       }
 
       setResult(result)
+      // Сбрасываем данные иллюстрации при других действиях
+      setIllustrationData(null)
     } catch (error) {
       console.error(`Ошибка при обработке запроса (${action}):`, error)
       setResult(`Ошибка при обработке запроса: ${error.message}\n\nПроверьте консоль браузера для подробностей.`)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleIllustration = async () => {
+    // Проверяем наличие URL или распарсенной статьи
+    const urlTrimmed = url ? url.trim() : ''
+    
+    // Если нет ни распарсенной статьи, ни URL - показываем ошибку и не начинаем загрузку
+    if (!parsedArticle && (!urlTrimmed || urlTrimmed.length === 0)) {
+      setResult('Ошибка: Пожалуйста, введите URL статьи или сначала распарсите статью')
+      setIllustrationData(null)
+      return
+    }
+
+    setLoading(true)
+    setActiveButton('illustration')
+    setResult('')
+    setIllustrationData(null)
+
+    try {
+      // Формируем тело запроса: передаем либо распарсенную статью, либо URL
+      const requestBody = parsedArticle
+        ? { article: parsedArticle }
+        : { url: urlTrimmed }
+
+      console.log('Отправка запроса на генерацию иллюстрации')
+      
+      let response
+      try {
+        response = await fetch('/api/illustration', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(requestBody),
+        })
+      } catch (networkError) {
+        console.error('Ошибка сети:', networkError)
+        setResult('Ошибка сети: не удалось подключиться к серверу. Проверьте подключение к интернету.')
+        return
+      }
+
+      console.log('Ответ получен, статус:', response.status)
+
+      let data
+      try {
+        data = await response.json()
+        console.log('Данные получены:', data)
+      } catch (jsonError) {
+        let text
+        try {
+          text = await response.text()
+        } catch (textError) {
+          text = 'Не удалось прочитать текст ответа'
+        }
+        console.error('Ошибка парсинга JSON:', jsonError, 'Текст ответа:', text)
+        setResult(`Ошибка: Не удалось распарсить ответ сервера. Статус: ${response.status}\nТекст: ${text}`)
+        return
+      }
+
+      if (!response.ok) {
+        setResult(`Ошибка (${response.status}): ${data.error || 'Неизвестная ошибка'}`)
+        setIllustrationData(null)
+        return
+      }
+
+      // Сохраняем данные иллюстрации
+      if (data.imageUrl) {
+        setIllustrationData({
+          imageUrl: data.imageUrl,
+          prompt: data.prompt,
+          message: data.message
+        })
+        setResult(data.prompt ? `Промпт: ${data.prompt}` : 'Иллюстрация сгенерирована')
+      } else {
+        setIllustrationData({
+          imageUrl: null,
+          prompt: data.prompt,
+          message: data.message
+        })
+        setResult(data.prompt ? `Промпт: ${data.prompt}\n\n${data.message || 'Изображение не сгенерировано'}` : (data.message || 'Изображение не сгенерировано'))
+      }
+    } catch (error) {
+      console.error('Ошибка при генерации иллюстрации:', error)
+      setResult(`Ошибка при генерации иллюстрации: ${error.message}\n\nПроверьте консоль браузера для подробностей.`)
+      setIllustrationData(null)
     } finally {
       setLoading(false)
     }
@@ -239,7 +330,7 @@ export default function Home() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
             Выберите действие:
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <button
               onClick={() => handleSubmit('summary')}
               disabled={loading}
@@ -311,6 +402,30 @@ export default function Home() {
                 'Пост для Telegram'
               )}
             </button>
+
+            <button
+              onClick={handleIllustration}
+              disabled={loading}
+              className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+                activeButton === 'illustration' && loading
+                  ? 'bg-pink-600 text-white'
+                  : activeButton === 'illustration'
+                  ? 'bg-pink-500 text-white shadow-lg'
+                  : 'bg-pink-500 hover:bg-pink-600 text-white hover:shadow-md'
+              } disabled:opacity-50 disabled:cursor-not-allowed`}
+            >
+              {loading && activeButton === 'illustration' ? (
+                <span className="flex items-center justify-center gap-2">
+                  <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Генерация...
+                </span>
+              ) : (
+                'Иллюстрация'
+              )}
+            </button>
           </div>
         </div>
 
@@ -329,6 +444,26 @@ export default function Home() {
                   </svg>
                   <span>Обработка запроса...</span>
                 </div>
+              </div>
+            ) : illustrationData?.imageUrl ? (
+              <div className="space-y-4">
+                {illustrationData.prompt && (
+                  <div className="text-gray-700 dark:text-gray-300 text-sm">
+                    <strong>Промпт:</strong> {illustrationData.prompt}
+                  </div>
+                )}
+                <div className="flex justify-center">
+                  <img 
+                    src={illustrationData.imageUrl} 
+                    alt="Сгенерированная иллюстрация" 
+                    className="max-w-full h-auto rounded-lg shadow-lg"
+                  />
+                </div>
+                {illustrationData.message && (
+                  <div className="text-gray-600 dark:text-gray-400 text-sm italic">
+                    {illustrationData.message}
+                  </div>
+                )}
               </div>
             ) : result ? (
               <pre className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono text-sm overflow-x-auto">

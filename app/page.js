@@ -28,11 +28,14 @@ function getErrorMessage(error, response, data, isArticleLoading = false) {
         details: 'Не удалось подключиться к серверу. Проверьте подключение к интернету.'
       }
     }
-    if (data?.error?.includes('загрузки страницы') || data?.error?.includes('Ошибка загрузки')) {
-      return {
-        type: 'article_load',
-        message: 'Не удалось загрузить статью по этой ссылке.',
-        details: data.error
+    if (data?.error) {
+      const errorText = typeof data.error === 'string' ? data.error : data.error.message || String(data.error)
+      if (errorText.includes('загрузки страницы') || errorText.includes('Ошибка загрузки')) {
+        return {
+          type: 'article_load',
+          message: 'Не удалось загрузить статью по этой ссылке.',
+          details: errorText
+        }
       }
     }
     return {

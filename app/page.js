@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { Alert, AlertDescription, AlertTitle } from '../components/ui/alert'
 
 // Функция для обработки ошибок и возврата дружественных сообщений
@@ -145,6 +145,59 @@ export default function Home() {
   const [illustrationData, setIllustrationData] = useState(null)
   const [currentProcess, setCurrentProcess] = useState('')
   const [error, setError] = useState(null)
+  const [copied, setCopied] = useState(false)
+  const resultRef = useRef(null)
+
+  // Функция для очистки всех состояний
+  const handleClear = () => {
+    setUrl('')
+    setResult('')
+    setLoading(false)
+    setActiveButton(null)
+    setParsedArticle(null)
+    setIllustrationData(null)
+    setCurrentProcess('')
+    setError(null)
+    setCopied(false)
+  }
+
+  // Функция для копирования результата в буфер обмена
+  const handleCopy = async () => {
+    const textToCopy = result || (illustrationData?.prompt ? illustrationData.prompt : '')
+    if (!textToCopy) return
+
+    try {
+      await navigator.clipboard.writeText(textToCopy)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2000)
+    } catch (err) {
+      console.error('Ошибка копирования:', err)
+      // Fallback для старых браузеров
+      const textArea = document.createElement('textarea')
+      textArea.value = textToCopy
+      textArea.style.position = 'fixed'
+      textArea.style.opacity = '0'
+      document.body.appendChild(textArea)
+      textArea.select()
+      try {
+        document.execCommand('copy')
+        setCopied(true)
+        setTimeout(() => setCopied(false), 2000)
+      } catch (e) {
+        console.error('Ошибка копирования (fallback):', e)
+      }
+      document.body.removeChild(textArea)
+    }
+  }
+
+  // Автоматическая прокрутка к результатам после успешной генерации
+  useEffect(() => {
+    if (result || illustrationData?.imageUrl) {
+      setTimeout(() => {
+        resultRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      }, 100)
+    }
+  }, [result, illustrationData])
 
   const handleSubmit = async (action) => {
     // Проверяем наличие URL или распарсенной статьи
@@ -300,6 +353,7 @@ export default function Home() {
       // Сбрасываем данные иллюстрации при других действиях
       setIllustrationData(null)
       setCurrentProcess('')
+      // Прокрутка к результатам произойдет автоматически через useEffect
     } catch (error) {
       console.error(`Ошибка при обработке запроса (${action}):`, error)
       const isArticleLoading = !parsedArticle
@@ -420,6 +474,7 @@ export default function Home() {
       }
       setError(null)
       setCurrentProcess('')
+      // Прокрутка к результатам произойдет автоматически через useEffect
     } catch (error) {
       console.error('Ошибка при генерации иллюстрации:', error)
       const isArticleLoading = !parsedArticle
@@ -499,6 +554,7 @@ export default function Home() {
       } else {
         setResult(data.translation)
         setError(null)
+        // Прокрутка к результатам произойдет автоматически через useEffect
       }
       setCurrentProcess('')
     } catch (error) {
@@ -516,21 +572,31 @@ export default function Home() {
     <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 py-12 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
         {/* Заголовок */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+        <div className="text-center mb-6 sm:mb-8">
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white mb-2 px-2">
             Референт - переводчик с ИИ-обработкой
           </h1>
-          <p className="text-gray-600 dark:text-gray-300">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 px-2">
             Введите URL англоязычной статьи для анализа
           </p>
         </div>
 
         {/* Форма ввода URL */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-          <label htmlFor="article-url" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            URL статьи
-          </label>
-          <div className="flex gap-3">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-2">
+            <label htmlFor="article-url" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              URL статьи
+            </label>
+            <button
+              onClick={handleClear}
+              disabled={loading}
+              title="Очистить все данные"
+              className="px-3 py-1.5 text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed self-start sm:self-auto"
+            >
+              Очистить
+            </button>
+          </div>
+          <div className="flex gap-2 sm:gap-3">
             <input
               id="article-url"
               type="url"
@@ -540,7 +606,7 @@ export default function Home() {
                 setError(null)
               }}
               placeholder="Введите URL статьи, например: https://example.com/article"
-              className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
+              className="flex-1 px-3 sm:px-4 py-2 sm:py-3 text-sm sm:text-base border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none bg-white dark:bg-gray-700 text-gray-900 dark:text-white placeholder-gray-400 dark:placeholder-gray-500"
               disabled={loading}
             />
           </div>
@@ -551,15 +617,15 @@ export default function Home() {
 
         {/* Кнопка перевода */}
         {parsedArticle && (
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
               Перевод статьи:
             </h2>
             <button
               onClick={handleTranslate}
               disabled={loading}
               title="Перевести распарсенную статью на русский язык"
-              className={`w-full px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+              className={`w-full px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base rounded-lg font-medium transition-all duration-200 ${
                 activeButton === 'translate' && loading
                   ? 'bg-red-600 text-white'
                   : activeButton === 'translate'
@@ -583,16 +649,16 @@ export default function Home() {
         )}
 
         {/* Кнопки действий */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 mb-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6 mb-4 sm:mb-6">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white mb-3 sm:mb-4">
             Выберите действие:
           </h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
             <button
               onClick={() => handleSubmit('summary')}
               disabled={loading}
               title="Получить краткое содержание статьи"
-              className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+              className={`w-full px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base rounded-lg font-medium transition-all duration-200 ${
                 activeButton === 'summary' && loading
                   ? 'bg-blue-600 text-white'
                   : activeButton === 'summary'
@@ -617,7 +683,7 @@ export default function Home() {
               onClick={() => handleSubmit('thesis')}
               disabled={loading}
               title="Создать тезисы статьи"
-              className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+              className={`w-full px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base rounded-lg font-medium transition-all duration-200 ${
                 activeButton === 'thesis' && loading
                   ? 'bg-green-600 text-white'
                   : activeButton === 'thesis'
@@ -642,7 +708,7 @@ export default function Home() {
               onClick={() => handleSubmit('telegram')}
               disabled={loading}
               title="Создать пост для Telegram на основе статьи"
-              className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+              className={`w-full px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base rounded-lg font-medium transition-all duration-200 ${
                 activeButton === 'telegram' && loading
                   ? 'bg-purple-600 text-white'
                   : activeButton === 'telegram'
@@ -667,7 +733,7 @@ export default function Home() {
               onClick={handleIllustration}
               disabled={loading}
               title="Сгенерировать иллюстрацию для статьи"
-              className={`px-6 py-3 rounded-lg font-medium transition-all duration-200 ${
+              className={`w-full px-4 sm:px-6 py-2.5 sm:py-3 text-sm sm:text-base rounded-lg font-medium transition-all duration-200 ${
                 activeButton === 'illustration' && loading
                   ? 'bg-pink-600 text-white'
                   : activeButton === 'illustration'
@@ -692,13 +758,13 @@ export default function Home() {
 
         {/* Блок текущего процесса */}
         {currentProcess && (
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg shadow-md p-4 mb-6">
-            <div className="flex items-center gap-3">
-              <svg className="animate-spin h-5 w-5 text-blue-600 dark:text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg shadow-md p-3 sm:p-4 mb-4 sm:mb-6">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <svg className="animate-spin h-4 w-4 sm:h-5 sm:w-5 text-blue-600 dark:text-blue-400 flex-shrink-0" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                 <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                 <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              <span className="text-sm font-medium text-blue-800 dark:text-blue-300">
+              <span className="text-xs sm:text-sm font-medium text-blue-800 dark:text-blue-300 break-words">
                 {currentProcess}
               </span>
             </div>
@@ -707,32 +773,57 @@ export default function Home() {
 
         {/* Блок ошибок */}
         {error && (
-          <Alert variant="destructive" className="mb-6">
-            <AlertTitle>{error.message}</AlertTitle>
-            <AlertDescription>{error.details}</AlertDescription>
+          <Alert variant="destructive" className="mb-4 sm:mb-6">
+            <AlertTitle className="text-sm sm:text-base">{error.message}</AlertTitle>
+            <AlertDescription className="text-xs sm:text-sm">{error.details}</AlertDescription>
           </Alert>
         )}
 
         {/* Блок результата */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-            Результат:
-          </h2>
-          <div className="min-h-[200px] p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
+        <div ref={resultRef} className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-4 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 mb-3 sm:mb-4">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
+              Результат:
+            </h2>
+            {(result || illustrationData?.imageUrl || illustrationData?.prompt) && (
+              <button
+                onClick={handleCopy}
+                title="Копировать результат"
+                className="px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 self-start sm:self-auto"
+              >
+                {copied ? (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    Скопировано
+                  </>
+                ) : (
+                  <>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                    Копировать
+                  </>
+                )}
+              </button>
+            )}
+          </div>
+          <div className="min-h-[200px] p-3 sm:p-4 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700">
             {loading ? (
-              <div className="text-gray-400 dark:text-gray-500 text-center py-8">
+              <div className="text-gray-400 dark:text-gray-500 text-center py-6 sm:py-8">
                 <div className="flex items-center justify-center gap-2">
-                  <svg className="animate-spin h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin h-5 w-5 sm:h-6 sm:w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  <span>Обработка запроса...</span>
+                  <span className="text-sm sm:text-base">Обработка запроса...</span>
                 </div>
               </div>
             ) : illustrationData?.imageUrl ? (
-              <div className="space-y-4">
+              <div className="space-y-3 sm:space-y-4">
                 {illustrationData.prompt && (
-                  <div className="text-gray-700 dark:text-gray-300 text-sm">
+                  <div className="text-gray-700 dark:text-gray-300 text-xs sm:text-sm break-words">
                     <strong>Промпт:</strong> {illustrationData.prompt}
                   </div>
                 )}
@@ -744,17 +835,17 @@ export default function Home() {
                   />
                 </div>
                 {illustrationData.message && (
-                  <div className="text-gray-600 dark:text-gray-400 text-sm italic">
+                  <div className="text-gray-600 dark:text-gray-400 text-xs sm:text-sm italic break-words">
                     {illustrationData.message}
                   </div>
                 )}
               </div>
             ) : result ? (
-              <pre className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono text-sm overflow-x-auto">
+              <pre className="text-gray-800 dark:text-gray-200 whitespace-pre-wrap font-mono text-xs sm:text-sm overflow-x-auto break-words">
                 {result}
               </pre>
             ) : (
-              <div className="text-gray-400 dark:text-gray-500 text-center py-8">
+              <div className="text-gray-400 dark:text-gray-500 text-center py-6 sm:py-8 text-sm sm:text-base">
                 Результат появится здесь после выбора действия
               </div>
             )}

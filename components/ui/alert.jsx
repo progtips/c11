@@ -6,7 +6,7 @@ export function Alert({ variant = 'default', className = '', children }) {
   }
 
   return (
-    <div className={`rounded-lg border p-4 ${variants[variant]} ${className}`}>
+    <div className={`rounded-lg border p-3 sm:p-4 ${variants[variant]} ${className}`}>
       {children}
     </div>
   )
